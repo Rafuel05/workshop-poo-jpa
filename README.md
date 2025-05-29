@@ -168,7 +168,10 @@ Nesta branch, adicionaremos as dependências necessárias no `pom.xml`, criaremo
             private int codigo;
             
             private String nome;
-            private float margemLucro; // Em Java, float pode ter problemas de precisão para valores monetários. BigDecimal é geralmente preferido.
+
+            @Column(name="margem_lucro")
+            private float margemLucro; 
+            
             private float promocao;
 
             // Construtor padrão (exigido pelo JPA)
@@ -430,3 +433,136 @@ Nesta branch, vamos criar uma aplicação simples para inserir dados de um `Grup
         * Coloca o objeto `grupoVO` no contexto de persistência. Neste ponto, o objeto se torna *gerenciado* pelo JPA. Se for um objeto novo (sem ID ou com ID gerável), ele será agendado para inserção no banco quando a transação for comitada.
     5.  **`em.getTransaction().commit();`**
         * Confirma a transação. Neste momento, as alterações pendentes (como a inserção do `grupoVO`) são sincronizadas com o banco de dados. O Hibernate gerará o SQL `INSERT` correspondente. Se a chave primária (`codigo`) for gerada pelo banco (ex: via `GenerationType.SEQUENCE` ou `IDENTITY`), após o `commit` (ou às vezes após o `persist`, dependendo da estratégia de geração e do provedor JPA), o objeto `grupoVO` terá seu campo `codigo` preenchido.
+
+## Branch 5 - Alterando Objeto Persistido
+
+Nesta branch, aprenderemos como recuperar um objeto existente do banco de dados, permitir que o usuário modifique seus dados e, em seguida, persistir essas alterações. Usaremos a classe `Alterar1.java` como exemplo, que buscará um `GrupoProdutoVO` pelo nome, permitirá a edição de seus campos e salvará as modificações.
+
+### O que deve ser feito nesta etapa:
+
+1.  **Criar a Classe de Alteração (`Alterar1.java`):**
+    * No seu projeto, dentro do pacote `ifmt.cba.apps` (ou o pacote que você está usando para as classes de aplicação), crie uma nova classe Java chamada `Alterar1.java`.
+    * Cole o seguinte código nesta classe:
+
+        ```java
+        package ifmt.cba.apps;
+
+        import java.util.List;
+        import jakarta.persistence.EntityManager;
+        import jakarta.persistence.EntityManagerFactory;
+        import jakarta.persistence.Persistence;
+        import jakarta.persistence.Query; // Import para jakarta.persistence.Query
+        import javax.swing.JOptionPane;
+
+        import ifmt.cba.vo.GrupoProdutoVO; // Certifique-se que o pacote 'vo' e a classe estão corretos
+
+        public class Alterar1 {
+            public static void main(String args[]) {
+                EntityManagerFactory emf = null;
+                EntityManager em = null;
+                GrupoProdutoVO grupoVO = null;
+
+                try {
+                    emf = Persistence.createEntityManagerFactory("UnidadeProdutos");
+                    em = emf.createEntityManager();
+                    em.getTransaction().begin(); // Inicia a transação
+
+                    // Solicita o nome do grupo de produto a ser localizado
+                    String pNomeBusca = JOptionPane.showInputDialog("Forneca o nome do grupo de produto a ser localizado para alteração");
+
+                    if (pNomeBusca == null || pNomeBusca.trim().isEmpty()) {
+                        JOptionPane.showMessageDialog(null, "A busca pelo nome foi cancelada ou nenhum nome foi fornecido.");
+                        if (em.getTransaction().isActive()) {
+                            em.getTransaction().rollback();
+                        }
+                        return; // Encerra a execução se o nome não for fornecido
+                    }
+
+                    // Cria a consulta para buscar o GrupoProdutoVO pelo nome (case-insensitive)
+                    Query consulta = em.createQuery("SELECT gp FROM GrupoProdutoVO gp WHERE UPPER(gp.nome) = :pNomeBusca");
+                    consulta.setParameter("pNomeBusca", pNomeBusca.toUpperCase());
+
+                    @SuppressWarnings("unchecked")
+                    List<GrupoProdutoVO> lista = consulta.getResultList();
+
+                    if (!lista.isEmpty()) {
+                        grupoVO = lista.get(0); // Pega o primeiro resultado
+
+                        // Solicita os novos dados, preenchendo com os valores atuais
+                        String nomeNovo = JOptionPane.showInputDialog("Alterar nome do grupo:", grupoVO.getNome());
+                        float margemNova = Float.parseFloat(
+                            JOptionPane.showInputDialog("Alterar percentual da margem de lucro (ex: 0.25):", grupoVO.getMargemLucro())
+                        );
+                        float promocaoNova = Float.parseFloat(
+                            JOptionPane.showInputDialog("Alterar percentual de promocao (ex: 0.10):", grupoVO.getPromocao())
+                        );
+
+                        // Altera os dados do objeto VO encontrado (entidade gerenciada)
+                        if (nomeNovo != null && !nomeNovo.trim().isEmpty()) {
+                            grupoVO.setNome(nomeNovo);
+                        }
+                        grupoVO.setMargemLucro(margemNova);
+                        grupoVO.setPromocao(promocaoNova);
+
+                        // Não é necessário chamar em.merge() ou em.persist() explicitamente aqui,
+                        // pois 'grupoVO' é uma entidade gerenciada e as alterações são
+                        // detectadas e sincronizadas no commit da transação.
+                        em.getTransaction().commit();
+                        System.out.println("Alteracao realizada com sucesso para o grupo: " + grupoVO.getNome() + " (Código: " + grupoVO.getCodigo() + ")");
+                        JOptionPane.showMessageDialog(null, "Alteração realizada com sucesso!", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+
+                    } else {
+                        System.out.println("Grupo de Produto com nome \"" + pNomeBusca + "\" nao localizado para alteração.");
+                        JOptionPane.showMessageDialog(null, "Grupo de Produto com nome \"" + pNomeBusca + "\" não localizado.", "Não Encontrado", JOptionPane.WARNING_MESSAGE);
+                        if (em.getTransaction().isActive()) {
+                            em.getTransaction().rollback(); // Desfaz a transação se nada foi alterado
+                        }
+                    }
+
+                } catch (NumberFormatException ex) {
+                    System.err.println("Erro ao converter valor numérico: " + ex.getMessage());
+                    if (em != null && em.getTransaction().isActive()) {
+                        em.getTransaction().rollback();
+                    }
+                    JOptionPane.showMessageDialog(null, "Por favor, insira valores numéricos válidos para margem e promoção.", "Erro de Entrada", JOptionPane.ERROR_MESSAGE);
+                } catch (Exception ex) {
+                    System.err.println("Alteracao nao realizada - ERRO: " + ex.getMessage());
+                    ex.printStackTrace();
+                    if (em != null && em.getTransaction().isActive()) {
+                        em.getTransaction().rollback();
+                    }
+                    JOptionPane.showMessageDialog(null, "Ocorreu um erro na alteração: " + ex.getMessage(), "Erro de Persistência", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    if (em != null && em.isOpen()) {
+                        em.close();
+                    }
+                    if (emf != null && emf.isOpen()) {
+                        emf.close();
+                    }
+                }
+            }
+        }
+        ```
+
+### Entendendo o Código `Alterar1.java`:
+
+* **Busca do Objeto:**
+    * O usuário é solicitado a fornecer o nome do grupo de produto que deseja alterar.
+    * Uma consulta JPQL (`SELECT gp FROM GrupoProdutoVO gp WHERE UPPER(gp.nome) = :pNomeBusca`) é usada para buscar o objeto no banco de dados de forma insensível a maiúsculas/minúsculas.
+    * `consulta.setParameter("pNomeBusca", pNomeBusca.toUpperCase())` define o parâmetro da consulta.
+    * `consulta.getResultList()` retorna uma lista de objetos encontrados. Espera-se que o nome seja um identificador razoavelmente único para este exemplo, ou o primeiro da lista será usado.
+
+* **Manipulação do Resultado:**
+    * Se a lista de resultados não estiver vazia (`!lista.isEmpty()`), o primeiro objeto (`grupoVO = lista.get(0);`) é selecionado para alteração.
+    * Se nenhum objeto for encontrado, uma mensagem é exibida e a transação (se iniciada) é desfeita (`rollback`).
+
+* **Modificação dos Dados:**
+    * `JOptionPane.showInputDialog` é usado novamente, desta vez com dois argumentos: a mensagem de prompt e o valor atual do atributo do objeto (`grupoVO.getNome()`, `grupoVO.getMargemLucro()`, etc.). Isso preenche a caixa de diálogo com os dados existentes, facilitando a modificação pelo usuário.
+    * Os setters do objeto `grupoVO` (`setNome`, `setMargemLucro`, `setPromocao`) são chamados para atualizar seus atributos com os novos valores fornecidos.
+
+* **Persistência das Alterações (Atualização):**
+    * **Importante:** Quando você recupera um objeto usando o `EntityManager` e ele está dentro de uma transação ativa, esse objeto se torna *gerenciado* pelo contexto de persistência.
+    * Quaisquer modificações feitas nos atributos de uma entidade gerenciada (através de seus métodos setters) são automaticamente rastreadas pelo JPA.
+    * Quando `em.getTransaction().commit()` é chamado, o JPA detecta essas alterações ("dirty checking") e gera automaticamente as instruções SQL `UPDATE` necessárias para sincronizar o estado do objeto com o banco de dados.
+    * Portanto, **não é necessário chamar `em.persist()` ou `em.merge()` explicitamente** para atualizar um objeto que já está sendo gerenciado e foi modificado dentro de uma transação.
+
