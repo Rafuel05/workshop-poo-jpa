@@ -311,18 +311,6 @@ Nesta branch, adicionaremos as dependências necessárias no `pom.xml`, criaremo
                     em = emf.createEntityManager();
                     System.out.println("Contexto de persistencia e EntityManager criados com sucesso!");
                     System.out.println("Hibernate deve ter criado a tabela 'grupoproduto' no banco 'bdprodutos'. Verifique!");
-
-                    // Aqui você poderia adicionar código para persistir ou consultar entidades no futuro.
-                    // Exemplo:
-                    // em.getTransaction().begin();
-                    // GrupoProdutoVO novoGrupo = new GrupoProdutoVO();
-                    // novoGrupo.setNome("Eletrônicos");
-                    // novoGrupo.setMargemLucro(0.25f);
-                    // novoGrupo.setPromocao(0.05f);
-                    // em.persist(novoGrupo);
-                    // em.getTransaction().commit();
-                    // System.out.println("Novo grupo persistido: " + novoGrupo);
-
                 } catch(Exception ex) {
                     ex.printStackTrace();
                     System.out.println("Contexto de persistencia nao foi criado -- ERRO: "+ ex.getMessage());
