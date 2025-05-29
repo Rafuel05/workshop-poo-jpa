@@ -330,4 +330,103 @@ Nesta branch, adicionaremos as dependências necessárias no `pom.xml`, criaremo
         * O bloco `try-catch-finally` garante que os recursos (`EntityManager` e `EntityManagerFactory`) sejam fechados corretamente, mesmo se ocorrerem erros.
         * Ao executar esta classe (como uma aplicação Java), se tudo estiver configurado corretamente e a propriedade `javax.persistence.schema-generation.database.action` estiver como `drop-and-create` ou `create`, você deverá ver a mensagem de sucesso e o Hibernate deverá ter criado a tabela `grupoproduto` no seu banco de dados `bdprodutos`. Verifique seu cliente de banco de dados para confirmar.
 
----
+## Branch 4 - Persistindo Objeto
+
+Nesta branch, vamos criar uma aplicação simples para inserir dados de um `GrupoProdutoVO` no banco de dados. Utilizaremos `JOptionPane` para entrada de dados e demonstraremos o ciclo básico de persistência de um objeto com JPA.
+
+### O que deve ser feito nesta etapa:
+
+1.  **Criar a Classe de Inclusão (`Incluir1.java`):**
+    * No seu projeto, dentro do pacote `ifmt.cba.apps` (ou o pacote que você está usando para as classes de aplicação/teste), crie uma nova classe Java chamada `Incluir1.java`.
+    * Cole o seguinte código nesta classe:
+
+        ```java
+        package ifmt.cba.apps;
+
+        import jakarta.persistence.EntityManager;
+        import jakarta.persistence.EntityManagerFactory;
+        import jakarta.persistence.Persistence;
+        import javax.swing.JOptionPane; // Import para JOptionPane
+
+        import ifmt.cba.vo.GrupoProdutoVO; // Certifique-se que o pacote 'vo' e a classe estão corretos
+
+        public class Incluir1 {
+            public static void main(String args[]) {
+                EntityManagerFactory emf = null;
+                EntityManager em = null;
+                GrupoProdutoVO grupoVO = new GrupoProdutoVO(); // Cria uma instância da entidade
+
+                try {
+                    // Coleta de dados do usuário via JOptionPane
+                    String nome = JOptionPane.showInputDialog("Forneca o nome do grupo de produto");
+                    float margem = Float.parseFloat(
+                        JOptionPane.showInputDialog("Forneca o percentual da margem de lucro do grupo de produto (ex: 0.25 para 25%)")
+                    );
+                    float promocao = Float.parseFloat(
+                        JOptionPane.showInputDialog("Forneca o percentual de promocao do grupo de produto (ex: 0.1 para 10%)")
+                    );
+
+                    // Define os atributos do objeto VO com os dados fornecidos
+                    grupoVO.setNome(nome);
+                    grupoVO.setMargemLucro(margem);
+                    grupoVO.setPromocao(promocao);
+
+                    // 1. Obter o EntityManagerFactory (usando o nome da unidade de persistência do persistence.xml)
+                    emf = Persistence.createEntityManagerFactory("UnidadeProdutos");
+                    // 2. Obter o EntityManager
+                    em = emf.createEntityManager();
+                    
+                    // 3. Iniciar uma transação
+                    em.getTransaction().begin();
+                    // 4. Persistir o objeto (torná-lo gerenciado e marcá-lo para inserção)
+                    em.persist(grupoVO);
+                    // 5. Comitar a transação (efetivar a inserção no banco de dados)
+                    em.getTransaction().commit();
+                    
+                    System.out.println("Inclusao realizada com sucesso. Código gerado: " + grupoVO.getCodigo());
+
+                } catch (NumberFormatException ex) {
+                    System.err.println("Erro ao converter numero: " + ex.getMessage());
+                    JOptionPane.showMessageDialog(null, "Por favor, insira valores numéricos válidos para margem e promoção.", "Erro de Entrada", JOptionPane.ERROR_MESSAGE);
+                } catch (Exception ex) {
+                    // Se a transação estiver ativa e ocorreu um erro, faz rollback
+                    if (em != null && em.getTransaction().isActive()) {
+                        em.getTransaction().rollback();
+                    }
+                    System.err.println("Inclusao nao realizada - ERRO: " + ex.getMessage());
+                    ex.printStackTrace(); // Imprime o rastreamento completo do erro no console de erro
+                    JOptionPane.showMessageDialog(null, "Ocorreu um erro na inclusão: " + ex.getMessage(), "Erro de Persistência", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    // 6. Fechar o EntityManager e o EntityManagerFactory
+                    if (em != null && em.isOpen()) {
+                        em.close();
+                    }
+                    if (emf != null && emf.isOpen()) {
+                        emf.close();
+                    }
+                }
+            }
+        }
+        ```
+
+### Entendendo o Código `Incluir1.java`:
+
+* **Coleta de Dados:**
+    * `JOptionPane.showInputDialog(...)` é usado para exibir caixas de diálogo e obter a entrada do usuário para o nome, margem de lucro e promoção do grupo de produtos.
+    * `Float.parseFloat(...)` converte a entrada de texto para valores `float`.
+
+* **Instanciação e Configuração do Objeto:**
+    * `GrupoProdutoVO grupoVO = new GrupoProdutoVO();` cria um novo objeto da nossa entidade.
+    * `grupoVO.setNome(nome);` e métodos `set` similares são usados para popular o objeto com os dados coletados.
+
+* **Ciclo de Vida da Persistência JPA:**
+    1.  **`EntityManagerFactory emf = Persistence.createEntityManagerFactory("UnidadeProdutos");`**
+        * Cria uma fábrica de `EntityManager` baseada na unidade de persistência "UnidadeProdutos" definida no `persistence.xml`. Esta operação é custosa e geralmente é feita uma vez por aplicação.
+    2.  **`EntityManager em = emf.createEntityManager();`**
+        * Cria um `EntityManager`, que é a interface principal para interagir com o contexto de persistência. Cada `EntityManager` gerencia um conjunto de entidades.
+    3.  **`em.getTransaction().begin();`**
+        * Inicia uma transação. Todas as operações de escrita (persistir, atualizar, remover) no JPA devem ocorrer dentro de uma transação.
+    4.  **`em.persist(grupoVO);`**
+        * Coloca o objeto `grupoVO` no contexto de persistência. Neste ponto, o objeto se torna *gerenciado* pelo JPA. Se for um objeto novo (sem ID ou com ID gerável), ele será agendado para inserção no banco quando a transação for comitada.
+    5.  **`em.getTransaction().commit();`**
+        * Confirma a transação. Neste momento, as alterações pendentes (como a inserção do `grupoVO`) são sincronizadas com o banco de dados. O Hibernate gerará o SQL `INSERT` correspondente. Se a chave primária (`codigo`) for gerada pelo banco (ex: via `GenerationType.SEQUENCE` ou `IDENTITY`), após o `commit` (ou às vezes após o `persist`, dependendo da estratégia de geração e do provedor JPA), o objeto `grupoVO` terá seu campo `codigo` preenchido.
