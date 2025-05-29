@@ -7,6 +7,9 @@
     <persistence-unit name="UnidadeProdutos" transaction-type="RESOURCE_LOCAL">
         <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
+
+        <class>ifmt.cba.VO.GrupoProdutoVO</class> 
+
         <properties>
             <property name="javax.persistence.jdbc.url" value="jdbc:postgresql://localhost:5434/bdprodutos" />
             <property name="javax.persistence.jdbc.user" value="postgres" />
