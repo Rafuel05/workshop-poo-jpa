@@ -18,6 +18,10 @@ public class GrupoProdutoVO implements Serializable {
     private String nome;
     private float margemLucro;
     private float promocao;
+    
+    public GrupoProdutoVO() {
+        
+    }
 
     public int getCodigo(){
         return codigo;

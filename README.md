@@ -163,8 +163,6 @@ Nesta branch, adicionaremos as dependências necessárias no `pom.xml`, criaremo
         @Table(name = "grupoproduto") // Define o nome da tabela no banco
         public class GrupoProdutoVO implements Serializable {
             
-            private static final long serialVersionUID = 1L; // Boa prática para Serializable
-
             @Id
             @GeneratedValue(strategy = GenerationType.SEQUENCE) // PostgreSQL geralmente usa SEQUENCE
             private int codigo;
