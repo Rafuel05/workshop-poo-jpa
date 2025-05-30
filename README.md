@@ -566,3 +566,77 @@ Nesta branch, aprenderemos como recuperar um objeto existente do banco de dados,
     * Quando `em.getTransaction().commit()` é chamado, o JPA detecta essas alterações ("dirty checking") e gera automaticamente as instruções SQL `UPDATE` necessárias para sincronizar o estado do objeto com o banco de dados.
     * Portanto, **não é necessário chamar `em.persist()` ou `em.merge()` explicitamente** para atualizar um objeto que já está sendo gerenciado e foi modificado dentro de uma transação.
 
+## Branch 6 - Excluindo Objeto Persistido
+
+Nesta etapa, vamos aprender como remover (excluir) um objeto que já existe no banco de dados.
+
+### O que deve ser feito nesta etapa:
+
+1.  **Criar a Classe de Exclusão (`Excluir1.java`):**
+    * No pacote `ifmt.cba.apps`, crie `Excluir1.java`:
+
+        ```java
+        package ifmt.cba.apps;
+
+        import java.util.List;
+        import jakarta.persistence.EntityManager;
+        import jakarta.persistence.EntityManagerFactory;
+        import jakarta.persistence.Persistence;
+        import jakarta.persistence.Query;
+        import javax.swing.JOptionPane;
+        import ifmt.cba.vo.GrupoProdutoVO;
+
+        public class Excluir1 {
+            public static void main(String args[]) {
+                EntityManagerFactory emf = null;
+                EntityManager em = null;
+
+                try {
+                    emf = Persistence.createEntityManagerFactory("UnidadeProdutos");
+                    em = emf.createEntityManager();
+                    em.getTransaction().begin();
+
+                    String pNome = JOptionPane.showInputDialog("Forneca o nome do grupo de produto a ser excluido");
+
+                    if (pNome == null || pNome.trim().isEmpty()) {
+                        JOptionPane.showMessageDialog(null, "A exclusão foi cancelada ou nenhum nome foi fornecido.");
+                        if (em.getTransaction().isActive()) { em.getTransaction().rollback(); }
+                        return;
+                    }
+
+                    Query consulta = em.createQuery("SELECT gp FROM GrupoProdutoVO gp WHERE UPPER(gp.nome) = :pNome");
+                    consulta.setParameter("pNome", pNome.toUpperCase());
+
+                    @SuppressWarnings("unchecked")
+                    List<GrupoProdutoVO> lista = consulta.getResultList();
+
+                    if (!lista.isEmpty()) {
+                        GrupoProdutoVO grupoVOParaExcluir = lista.get(0);
+                        em.remove(grupoVOParaExcluir); // Marca para remoção
+                        em.getTransaction().commit(); // Efetiva a remoção
+                        System.out.println("Exclusao realizada com sucesso para o grupo: " + pNome);
+                        JOptionPane.showMessageDialog(null, "Exclusão realizada com sucesso!", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+                    } else {
+                        System.out.println("Grupo de Produto com nome \"" + pNome + "\" nao localizado para exclusão.");
+                        JOptionPane.showMessageDialog(null, "Grupo de Produto com nome \"" + pNome + "\" não localizado.", "Não Encontrado", JOptionPane.WARNING_MESSAGE);
+                        if (em.getTransaction().isActive()) { em.getTransaction().rollback(); }
+                    }
+                } catch (Exception ex) {
+                    System.err.println("Exclusao nao realizada - ERRO: " + ex.getMessage());
+                    ex.printStackTrace();
+                    if (em != null && em.getTransaction().isActive()) { em.getTransaction().rollback(); }
+                    JOptionPane.showMessageDialog(null, "Ocorreu um erro na exclusão: " + ex.getMessage(), "Erro de Persistência", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    if (em != null && em.isOpen()) { em.close(); }
+                    if (emf != null && emf.isOpen()) { emf.close(); }
+                }
+            }
+        }
+        ```
+
+### Entendendo o Código `Excluir1.java`:
+* Solicita o nome do objeto a ser excluído.
+* Busca o objeto no banco.
+* Se encontrado, `em.remove(objeto)` marca a entidade para remoção.
+* A exclusão efetiva ocorre no `commit` da transação.
+* Trata casos de objeto não encontrado e outros erros.
