@@ -755,3 +755,368 @@ Nesta sétima etapa, focaremos em como consultar e listar múltiplos objetos do 
 
 * **Transações em Consultas:**
     * Para operações de apenas leitura (como `SELECT` queries no JPA), não é estritamente necessário iniciar e comitar uma transação (`em.getTransaction().begin()`, `em.getTransaction().commit()`). O JPA pode executar consultas `SELECT` fora de uma transação explícita na maioria dos casos.
+
+## Branch 8 - Implementação de Produto (Relacionamento Muitos-para-Um)
+
+Nesta oitava e última branch do nosso workshop, vamos introduzir uma nova entidade, `ProdutoVO`, que terá um relacionamento do tipo Muitos-para-Um (`@ManyToOne`) com a entidade `GrupoProdutoVO` que já criamos. Isso significa que muitos produtos podem pertencer a um grupo de produto.
+
+Vamos cobrir:
+1.  A criação da classe de entidade `ProdutoVO`.
+2.  A atualização do `persistence.xml` para incluir esta nova entidade.
+3.  A adaptação da classe `Incluir2.java` para permitir a inclusão de um novo `ProdutoVO`, associando-o a um `GrupoProdutoVO` existente.
+4.  A adaptação da classe `Consulta2.java` para listar objetos `ProdutoVO` e exibir informações do seu grupo associado.
+
+Este passo é fundamental para entender como mapear e trabalhar com relacionamentos entre entidades no JPA.
+
+### O que deve ser feito nesta etapa:
+
+1.  **Criar a Entidade `ProdutoVO.java`:**
+    * No pacote `ifmt.cba.VO` (ou `ifmt.cba.vo`), crie a classe `ProdutoVO.java`. Esta classe representará os produtos em nosso sistema.
+    * Cole o seguinte código:
+
+        ```java
+        package ifmt.cba.VO; // ou ifmt.cba.vo
+
+        import jakarta.persistence.Column;
+        import jakarta.persistence.Entity;
+        import jakarta.persistence.GeneratedValue;
+        import jakarta.persistence.GenerationType;
+        import jakarta.persistence.Id;
+        import jakarta.persistence.ManyToOne; // Import para o relacionamento
+        import jakarta.persistence.Table;
+        import java.io.Serializable; // Boa prática adicionar Serializable
+
+        @Entity
+        @Table(name = "produto") // Nome da tabela no banco de dados
+        public class ProdutoVO implements Serializable { // Implementar Serializable
+            
+            private static final long serialVersionUID = 1L; // Para Serializable
+
+            @Id
+            @GeneratedValue(strategy = GenerationType.SEQUENCE)
+            private int codigo;
+
+            @Column(length = 50, nullable = false) // Nome não pode ser nulo
+            private String nome;
+
+            private int estoque;
+
+            @Column(name = "preco_compra")
+            private float precoCompra;
+
+            @Column(name = "margem_lucro")
+            private float margemLucro;
+
+            private float promocao; // Percentual de promoção, ex: 0.1 para 10%
+
+            private float venda; // Preço de venda final (pode ser calculado ou definido)
+
+            @ManyToOne // Muitos Produtos para Um GrupoProduto
+            private GrupoProdutoVO grupo; // Campo que representa o relacionamento
+
+            // Construtor padrão (necessário para JPA)
+            public ProdutoVO() {}
+
+            // Getters e Setters para todos os atributos
+            public int getCodigo() { return codigo; }
+            public void setCodigo(int codigo) { this.codigo = codigo; }
+            public String getNome() { return nome; }
+            public void setNome(String nome) { this.nome = nome; }
+            public int getEstoque() { return estoque; }
+            public void setEstoque(int estoque) { this.estoque = estoque; }
+            public float getPrecoCompra() { return precoCompra; }
+            public void setPrecoCompra(float precoCompra) { this.precoCompra = precoCompra; }
+            public float getMargemLucro() { return margemLucro; }
+            public void setMargemLucro(float margemLucro) { this.margemLucro = margemLucro; }
+            public float getPromocao() { return promocao; }
+            public void setPromocao(float promocao) { this.promocao = promocao; }
+            public float getVenda() { return venda; }
+            public void setVenda(float venda) { this.venda = venda; }
+            public GrupoProdutoVO getGrupo() { return grupo; }
+            public void setGrupo(GrupoProdutoVO grupo) { this.grupo = grupo; }
+
+            // Implementação de hashCode e equals é crucial, especialmente com relacionamentos
+            // e ao trabalhar com coleções ou o contexto de persistência do JPA.
+            // A implementação fornecida pelo usuário considera todos os campos.
+            // Alternativamente, para entidades, focar no @Id (após persistência) é comum.
+            @Override
+            public int hashCode() {
+                final int prime = 31;
+                int result = 1;
+                result = prime * result + codigo;
+                result = prime * result + ((nome == null) ? 0 : nome.hashCode());
+                result = prime * result + estoque;
+                result = prime * result + Float.floatToIntBits(precoCompra);
+                result = prime * result + Float.floatToIntBits(margemLucro);
+                result = prime * result + Float.floatToIntBits(promocao);
+                result = prime * result + Float.floatToIntBits(venda);
+                // Considerar o hashCode do 'grupo' pode ser complexo se ele for lazy-loaded
+                // e não estiver carregado. Uma abordagem comum é usar o ID do grupo se disponível.
+                result = prime * result + ((grupo == null || grupo.getCodigo() == 0) ? 0 : grupo.hashCode());
+                return result;
+            }
+
+            @Override
+            public boolean equals(Object obj) {
+                if (this == obj) return true;
+                if (obj == null) return false;
+                if (getClass() != obj.getClass()) return false;
+                ProdutoVO other = (ProdutoVO) obj;
+                if (codigo != 0 && other.codigo != 0) { // Se ambos têm ID, compare por ID
+                    return codigo == other.codigo;
+                }
+                // Se os IDs não estão definidos (objetos novos), compara por outros campos.
+                // A implementação fornecida pelo usuário compara todos os campos.
+                if (nome == null) {
+                    if (other.nome != null) return false;
+                } else if (!nome.equals(other.nome)) return false;
+                if (estoque != other.estoque) return false;
+                if (Float.floatToIntBits(precoCompra) != Float.floatToIntBits(other.precoCompra)) return false;
+                if (Float.floatToIntBits(margemLucro) != Float.floatToIntBits(other.margemLucro)) return false;
+                if (Float.floatToIntBits(promocao) != Float.floatToIntBits(other.promocao)) return false;
+                if (Float.floatToIntBits(venda) != Float.floatToIntBits(other.venda)) return false;
+                if (grupo == null) {
+                    if (other.grupo != null) return false;
+                } else if (grupo.getCodigo() != 0 && other.grupo.getCodigo() != 0) {
+                     if (!grupo.equals(other.grupo)) return false; // Compara grupos se ambos têm ID
+                } else if (grupo.getNome() != null && other.grupo.getNome() != null) {
+                     if (!grupo.getNome().equals(other.grupo.getNome())) return false; // Fallback para nome se ID não disponível
+                } else if (grupo != other.grupo) { // Fallback para referência se nomes também nulos
+                    return false;
+                }
+                return true;
+            }
+
+            @Override
+            public String toString() {
+                return "ProdutoVO [codigo=" + codigo + ", nome=" + nome + ", grupo=" + (grupo != null ? grupo.getNome() : "N/A") + "]";
+            }
+        }
+        ```
+    * **Entendendo a Entidade `ProdutoVO`:**
+        * `@Entity`, `@Table(name = "produto")`: Define a classe como uma entidade JPA mapeada para a tabela "produto".
+        * `@Id`, `@GeneratedValue`: Configuram a chave primária `codigo` com geração automática.
+        * `@Column(length = 50, nullable = false)`: Exemplo de como especificar o tamanho máximo de uma coluna de string e que ela não pode ser nula.
+        * `@Column(name = "preco_compra")`: Mapeia o atributo `precoCompra` para a coluna `preco_compra` no banco (útil se os nomes diferem da convenção Java).
+        * **`@ManyToOne`**: Esta é a anotação chave para o relacionamento. Indica que muitos `ProdutoVO` podem estar associados a um `GrupoProdutoVO`. O JPA criará uma coluna de chave estrangeira na tabela `produto` (por padrão, `grupo_codigo`) para armazenar o ID do `GrupoProdutoVO` associado.
+        * `private GrupoProdutoVO grupo;`: O campo que representa a associação.
+
+2.  **Atualizar `persistence.xml`:**
+    * Para que o Hibernate reconheça e gerencie a nova entidade `ProdutoVO`, precisamos listá-la no arquivo `src/main/resources/META-INF/persistence.xml`.
+    * Adicione a seguinte linha dentro da tag `<persistence-unit>`, junto com a declaração da classe `GrupoProdutoVO`:
+
+        ```xml
+        <class>ifmt.cba.VO.ProdutoVO</class>
+        ```
+    * O `persistence.xml` atualizado (parcialmente) ficará assim:
+
+        ```xml
+        <persistence-unit name="UnidadeProdutos" transaction-type="RESOURCE_LOCAL">
+            <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+            
+            <class>ifmt.cba.VO.GrupoProdutoVO</class> 
+            <class>ifmt.cba.VO.ProdutoVO</class> <exclude-unlisted-classes>true</exclude-unlisted-classes>
+            
+            <properties>
+                <property name="javax.persistence.jdbc.url" value="jdbc:postgresql://localhost:5432/bdprodutos" />
+                <property name="javax.persistence.jdbc.user" value="postgres" />
+                <property name="javax.persistence.jdbc.driver" value="org.postgresql.Driver" />
+                <property name="javax.persistence.jdbc.password" value="postgres" />
+                <property name="javax.persistence.schema-generation.database.action" value="drop-and-create" /> 
+                <property name="hibernate.dialect" value="org.hibernate.dialect.PostgreSQLDialect" />
+                <property name="hibernate.show_sql" value="true" />
+                <property name="hibernate.format_sql" value="true" />
+            </properties>
+        </persistence-unit>
+        ```
+    * Com `javax.persistence.schema-generation.database.action` como `drop-and-create`, o Hibernate irá criar a tabela `produto` com a coluna de chave estrangeira apropriada quando a aplicação for executada.
+
+3.  **Implementar `Incluir2.java` (Incluir Produto Relacionado):**
+    * Esta classe será responsável por cadastrar um novo `ProdutoVO`, associando-o a um `GrupoProdutoVO` já existente.
+    * No pacote `ifmt.cba.apps`, crie ou atualize a classe `Incluir2.java` com o seguinte código (conforme fornecido por você):
+
+        ```java
+        package ifmt.cba.apps;
+
+        import java.util.List;
+        import javax.swing.JOptionPane;
+        import ifmt.cba.VO.GrupoProdutoVO; // Corrigido para VO maiúsculo, conforme sua entidade
+        import ifmt.cba.VO.ProdutoVO;    // Corrigido para VO maiúsculo
+        import jakarta.persistence.EntityManager;
+        import jakarta.persistence.EntityManagerFactory;
+        import jakarta.persistence.Persistence;
+        import jakarta.persistence.Query;
+
+        public class Incluir2 {
+            public static void main(String args[]) {
+                EntityManagerFactory emf = null;
+                EntityManager em = null;
+                ProdutoVO produtoVO = null; // Não precisa inicializar aqui se for dentro do if
+                GrupoProdutoVO grupoVO = null;
+
+                try {
+                    emf = Persistence.createEntityManagerFactory("UnidadeProdutos");
+                    em = emf.createEntityManager();
+                    em.getTransaction().begin();
+
+                    String pNomeGrupo = JOptionPane.showInputDialog("Forneca o nome do GRUPO DE PRODUTO ao qual o novo produto pertencerá");
+                    if (pNomeGrupo == null || pNomeGrupo.trim().isEmpty()) {
+                        JOptionPane.showMessageDialog(null, "Nome do grupo não fornecido. Operação cancelada.");
+                        em.getTransaction().rollback();
+                        return;
+                    }
+
+                    Query consultaGrupo = em.createQuery("SELECT gp FROM GrupoProdutoVO gp WHERE UPPER(gp.nome) = :pNomeGrupo");
+                    consultaGrupo.setParameter("pNomeGrupo", pNomeGrupo.toUpperCase());
+                    List<GrupoProdutoVO> listaGrupos = consultaGrupo.getResultList();
+
+                    if (!listaGrupos.isEmpty()) {
+                        grupoVO = listaGrupos.get(0); // Pega o primeiro grupo encontrado
+
+                        String nomeProd = JOptionPane.showInputDialog("Forneca o nome do NOVO PRODUTO");
+                        if (nomeProd == null || nomeProd.trim().isEmpty()) {
+                             JOptionPane.showMessageDialog(null, "Nome do produto não fornecido. Operação cancelada.");
+                             em.getTransaction().rollback();
+                             return;
+                        }
+                        float compra = Float.parseFloat(JOptionPane.showInputDialog("Preco de compra do produto"));
+                        float venda = Float.parseFloat(JOptionPane.showInputDialog("Preco de venda do produto"));
+                        float margem = Float.parseFloat(JOptionPane.showInputDialog("Percentual da margem de lucro (ex: 0.25)"));
+                        float promocao = Float.parseFloat(JOptionPane.showInputDialog("Percentual de promocao (ex: 0.10)"));
+                        int estoque = Integer.parseInt(JOptionPane.showInputDialog("Estoque inicial do produto"));
+
+                        produtoVO = new ProdutoVO();
+                        produtoVO.setNome(nomeProd);
+                        produtoVO.setPrecoCompra(compra);
+                        produtoVO.setVenda(venda); // Assumindo que 'venda' é o preço final. Poderia ser calculado.
+                        produtoVO.setMargemLucro(margem);
+                        produtoVO.setPromocao(promocao);
+                        produtoVO.setEstoque(estoque);
+                        produtoVO.setGrupo(grupoVO); // Crucial: Associando o produto ao grupo recuperado
+
+                        em.persist(produtoVO); // Persiste o novo ProdutoVO
+                        em.getTransaction().commit();
+                        System.out.println("Inclusao de ProdutoVO realizada com sucesso. Código: " + produtoVO.getCodigo());
+                        JOptionPane.showMessageDialog(null, "Produto incluído com sucesso!", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+
+                    } else {
+                        System.out.println("Grupo de Produto com nome \"" + pNomeGrupo + "\" nao localizado. Produto não pode ser incluído.");
+                        JOptionPane.showMessageDialog(null, "Grupo de Produto não localizado!", "Erro", JOptionPane.ERROR_MESSAGE);
+                        em.getTransaction().rollback(); // Importante: rollback se o grupo não existe
+                    }
+                } catch (NumberFormatException ex) {
+                    System.err.println("Erro de formato numérico: " + ex.getMessage());
+                     if (em != null && em.getTransaction().isActive()) { em.getTransaction().rollback(); }
+                    JOptionPane.showMessageDialog(null, "Por favor, insira valores numéricos válidos.", "Erro de Entrada", JOptionPane.ERROR_MESSAGE);
+                } catch (Exception ex) {
+                    System.err.println("Inclusao de ProdutoVO nao realizada - ERRO: " + ex.getMessage());
+                    ex.printStackTrace();
+                    if (em != null && em.getTransaction().isActive()) { em.getTransaction().rollback(); }
+                    JOptionPane.showMessageDialog(null, "Erro ao incluir produto: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    if (em != null && em.isOpen()) { em.close(); }
+                    if (emf != null && emf.isOpen()) { emf.close(); }
+                }
+            }
+        }
+        ```
+    * **Entendendo `Incluir2.java`:**
+        * Primeiro, localiza um `GrupoProdutoVO` pelo nome.
+        * Se encontrado, coleta os dados para um novo `ProdutoVO`.
+        * **`produtoVO.setGrupo(grupoVO);`**: Esta linha é fundamental. Ela estabelece a associação entre o novo `ProdutoVO` e o `GrupoProdutoVO` existente.
+        * `em.persist(produtoVO);`: Salva o novo produto. O JPA cuidará de persistir a chave estrangeira correta na tabela `produto`.
+
+4.  **Implementar `Consulta2.java` (Consultar Produtos e seus Grupos):**
+    * Esta classe demonstrará como consultar produtos e acessar informações do grupo ao qual pertencem.
+    * No pacote `ifmt.cba.apps`, crie ou atualize a classe `Consulta2.java` (conforme fornecido por você):
+
+        ```java
+        package ifmt.cba.apps;
+
+        import java.util.List;
+        import javax.swing.JOptionPane;
+        import ifmt.cba.VO.ProdutoVO; // Corrigido para VO maiúsculo
+        // Não é necessário importar GrupoProdutoVO aqui se só acessamos via produto.getGrupo()
+        import jakarta.persistence.EntityManager;
+        import jakarta.persistence.EntityManagerFactory;
+        import jakarta.persistence.Persistence;
+        import jakarta.persistence.Query;
+        import jakarta.persistence.NoResultException; // Para tratar consulta que não retorna nada
+
+        public class Consulta2 {
+            public static void main(String args[]) {
+                EntityManagerFactory emf = null;
+                EntityManager em = null;
+                try {
+                    emf = Persistence.createEntityManagerFactory("UnidadeProdutos");
+                    em = emf.createEntityManager();
+
+                    String nomeProdBusca = JOptionPane.showInputDialog("Forneca parte do nome do PRODUTO a ser localizado (deixe em branco para todos)");
+
+                    String jpql = "SELECT p FROM ProdutoVO p";
+                    boolean temNome = false;
+                    if (nomeProdBusca != null && !nomeProdBusca.trim().isEmpty()) {
+                        jpql += " WHERE UPPER(p.nome) LIKE :pNomeProd";
+                        temNome = true;
+                    }
+                    jpql += " ORDER BY p.nome";
+
+                    Query consulta = em.createQuery(jpql);
+                    if (temNome) {
+                        consulta.setParameter("pNomeProd", "%" + nomeProdBusca.toUpperCase() + "%");
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    List<ProdutoVO> listaProdutos = consulta.getResultList();
+
+                    if (!listaProdutos.isEmpty()) {
+                        System.out.println("Produtos Encontrados (" + listaProdutos.size() + "):");
+                        StringBuilder sb = new StringBuilder();
+                        for (ProdutoVO produto : listaProdutos) {
+                            sb.append("---------------------------------------\n");
+                            sb.append("Codigo.......: ").append(produto.getCodigo()).append("\n");
+                            sb.append("Nome.........: ").append(produto.getNome()).append("\n");
+                            // Acessando o nome do grupo relacionado
+                            // É importante garantir que o grupo não seja nulo antes de chamar getNome()
+                            // E que a relação @ManyToOne em ProdutoVO não seja FetchType.LAZY se não houver transação ativa
+                            // ou que o acesso ocorra dentro de uma transação.
+                            // Para este exemplo simples, assumimos que será EAGER ou acessado em contexto ativo.
+                            sb.append("Grupo........: ").append(produto.getGrupo() != null ? produto.getGrupo().getNome() : "N/A").append("\n");
+                            sb.append("Preco Compra.: ").append(produto.getPrecoCompra()).append("\n");
+                            sb.append("Preco Venda..: ").append(produto.getVenda()).append("\n");
+                            sb.append("Margem Lucro.: ").append(produto.getMargemLucro()).append("\n");
+                            sb.append("Estoque......: ").append(produto.getEstoque()).append("\n");
+                        }
+                        sb.append("---------------------------------------\n");
+                        System.out.println(sb.toString());
+                        // Para exibir em JOptionPane, limitamos a quantidade ou usamos JTextArea
+                        if (listaProdutos.size() < 10) { // Exibe no JOptionPane se poucos resultados
+                           JOptionPane.showMessageDialog(null, sb.toString(), "Produtos Encontrados", JOptionPane.INFORMATION_MESSAGE);
+                        } else {
+                           JOptionPane.showMessageDialog(null, listaProdutos.size() + " produto(s) encontrado(s). Verifique o console para a lista completa.", "Consulta Realizada", JOptionPane.INFORMATION_MESSAGE);
+                        }
+                    } else {
+                        System.out.println("Nenhum produto localizado com os critérios fornecidos.");
+                        JOptionPane.showMessageDialog(null, "Nenhum produto localizado.", "Informação", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                } catch (NoResultException nre) {
+                    System.out.println("Nenhum produto localizado (NoResultException).");
+                     JOptionPane.showMessageDialog(null, "Nenhum produto localizado.", "Informação", JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception ex) {
+                    System.err.println("Consulta de ProdutoVO nao realizada - ERRO: " + ex.getMessage());
+                    ex.printStackTrace();
+                    JOptionPane.showMessageDialog(null, "Erro ao consultar produtos: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    if (em != null && em.isOpen()) { em.close(); }
+                    if (emf != null && emf.isOpen()) { emf.close(); }
+                }
+            }
+        }
+        ```
+    * **Entendendo `Consulta2.java`:**
+        * Realiza uma consulta na entidade `ProdutoVO`.
+        * Permite buscar por parte do nome do produto ou listar todos se nenhum nome for fornecido.
+        * **`produto.getGrupo().getNome()`**: Demonstra como navegar pelo relacionamento. A partir de um objeto `ProdutoVO`, você pode acessar o objeto `GrupoProdutoVO` associado e, então, seus atributos (como o nome do grupo).
+        * **Considerações sobre FetchType:** Se o relacionamento `@ManyToOne` em `ProdutoVO` for `FetchType.LAZY` (o padrão para relacionamentos `-ToOne` fora de um contexto de transação pode variar ou ser problemático), você precisaria garantir que `produto.getGrupo()` seja acessado enquanto o `EntityManager` está aberto e, idealmente, dentro de uma transação, ou usar estratégias como JOIN FETCH na consulta JPQL para carregar o grupo antecipadamente, ou configurar como `FetchType.EAGER` (o que pode ter implicações de desempenho se não for necessário sempre). Para este exemplo simples, presumimos que o acesso funcionará diretamente.
+
+        Esta branch conclui os principais aspectos do CRUD e introduz o conceito fundamental de relacionamentos entre entidades, que é uma parte poderosa do JPA. Parabéns por chegar até aqui!
