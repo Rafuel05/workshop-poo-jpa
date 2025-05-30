@@ -8,7 +8,8 @@
         <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
        
        
-        <class>ifmt.cba.VO.GrupoProdutoVO</class> 
+        <class>ifmt.cba.VO.GrupoProdutoVO</class>
+        <class>ifmt.cba.VO.ProdutoVO</class> 
         
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
         <properties>
