@@ -640,3 +640,118 @@ Nesta etapa, vamos aprender como remover (excluir) um objeto que já existe no b
 * Se encontrado, `em.remove(objeto)` marca a entidade para remoção.
 * A exclusão efetiva ocorre no `commit` da transação.
 * Trata casos de objeto não encontrado e outros erros.
+
+## Branch 7 - Listando Objetos (Consulta com LIKE e Ordenação)
+
+Nesta sétima etapa, focaremos em como consultar e listar múltiplos objetos do banco de dados. Criaremos a classe `Consulta1.java` que permitirá ao usuário buscar `GrupoProdutoVO` por parte do nome, utilizando a cláusula `LIKE` do JPQL para correspondência parcial de strings. Além disso, os resultados serão ordenados alfabeticamente. 🔎📋
+
+### O que deve ser feito nesta etapa:
+
+1.  **Criar a Classe de Consulta (`Consulta1.java`):**
+    * No pacote `ifmt.cba.apps` do seu projeto, crie uma nova classe Java chamada `Consulta1.java`.
+    * Cole o seguinte código nesta classe:
+
+        ```java
+        package ifmt.cba.apps;
+
+        import java.util.List;
+        import jakarta.persistence.EntityManager;
+        import jakarta.persistence.EntityManagerFactory;
+        import jakarta.persistence.Persistence;
+        import jakarta.persistence.Query;
+        import javax.swing.JOptionPane;
+        import ifmt.cba.vo.GrupoProdutoVO; // Certifique-se de que o pacote 'vo' está correto
+
+        public class Consulta1 {
+            public static void main(String args[]) {
+                EntityManagerFactory emf = null;
+                EntityManager em = null;
+
+                try {
+                    emf = Persistence.createEntityManagerFactory("UnidadeProdutos");
+                    em = emf.createEntityManager();
+                    // Para consultas (SELECT), uma transação explícita (begin/commit) não é sempre necessária.
+
+                    String nomeBusca = JOptionPane.showInputDialog("Forneca parte do nome do grupo de produto a ser localizado");
+
+                    if (nomeBusca == null) { // Usuário clicou em Cancelar ou fechou a caixa de diálogo
+                        System.out.println("Consulta cancelada pelo usuário.");
+                        if (em != null && em.getTransaction().isActive()) { // Se houvesse transação, faria rollback
+                           em.getTransaction().rollback();
+                        }
+                        return; // Encerra a execução
+                    }
+                    if (nomeBusca.trim().isEmpty()){
+                        nomeBusca = "%"; // Busca todos se o campo estiver vazio
+                        System.out.println("Nenhum nome fornecido. Listando todos os grupos...");
+                    } else {
+                        nomeBusca = "%" + nomeBusca.toUpperCase() + "%"; // Adiciona wildcards para LIKE
+                    }
+
+
+                    // Cria a consulta JPQL para buscar GrupoProdutoVO cujo nome contenha o texto fornecido (LIKE)
+                    // e ordena os resultados pelo nome.
+                    Query consulta = em.createQuery("SELECT gp FROM GrupoProdutoVO gp WHERE UPPER(gp.nome) LIKE :pNome ORDER BY gp.nome");
+                    // Adiciona os wildcards '%' para a cláusula LIKE e converte para maiúsculas
+                    consulta.setParameter("pNome", nomeBusca);
+
+                    @SuppressWarnings("unchecked") // Para suprimir o warning da conversão de List
+                    List<GrupoProdutoVO> lista = consulta.getResultList(); // Executa a consulta
+
+                    if (!lista.isEmpty()) { // Verifica se a lista de resultados não está vazia
+                        System.out.println("Grupos de Produtos Encontrados (" + lista.size() + "):");
+                        for (GrupoProdutoVO grupo : lista) {
+                            System.out.println("------------------------------------");
+                            System.out.println("Codigo.......: " + grupo.getCodigo());
+                            System.out.println("Nome.........: " + grupo.getNome());
+                            System.out.println("Margem Lucro.: " + grupo.getMargemLucro());
+                            System.out.println("Promocao.....: " + grupo.getPromocao());
+                        }
+                        System.out.println("------------------------------------");
+                        JOptionPane.showMessageDialog(null, lista.size() + " grupo(s) de produto(s) encontrado(s). Verifique o console.", "Consulta Realizada", JOptionPane.INFORMATION_MESSAGE);
+                    } else {
+                        String mensagem = nomeBusca.equals("%") ? "Nenhum Grupo de Produto cadastrado." : "Nenhum Grupo de Produto localizado com o nome contendo: \"" + nomeBusca.replace("%","") + "\"";
+                        System.out.println(mensagem);
+                        JOptionPane.showMessageDialog(null, mensagem, "Informação", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                } catch (Exception ex) {
+                    System.err.println("Consulta nao realizada - ERRO: " + ex.getMessage());
+                    ex.printStackTrace(); // Imprime o rastreamento completo do erro
+                    JOptionPane.showMessageDialog(null, "Ocorreu um erro na consulta: " + ex.getMessage(), "Erro de Persistência", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    if (em != null && em.isOpen()) {
+                        em.close();
+                    }
+                    if (emf != null && emf.isOpen()) {
+                        emf.close();
+                    }
+                }
+            }
+        }
+        ```
+
+### Entendendo o Código `Consulta1.java`:
+
+* **Entrada do Usuário para Busca:**
+    * `JOptionPane.showInputDialog` solicita ao usuário que forneça uma parte do nome do grupo de produtos que deseja buscar.
+    * Se o usuário cancelar ou não fornecer entrada, a consulta é interrompida ou, como implementado, busca todos os registros se o campo for deixado vazio (transformando `nomeBusca` em `"%"`).
+
+* **Construção da Consulta JPQL:**
+    * **`SELECT gp FROM GrupoProdutoVO gp WHERE UPPER(gp.nome) LIKE :pNome ORDER BY gp.nome`**
+        * `SELECT gp FROM GrupoProdutoVO gp`: Seleciona todos os objetos (`gp`) da entidade `GrupoProdutoVO`.
+        * `WHERE UPPER(gp.nome) LIKE :pNome`: Esta é a cláusula de filtragem.
+            * `UPPER(gp.nome)`: Converte o nome do grupo no banco de dados para maiúsculas para uma comparação insensível a maiúsculas/minúsculas.
+            * `LIKE :pNome`: Compara o nome (em maiúsculas) com o parâmetro fornecido (`:pNome`). A cláusula `LIKE` permite o uso de caracteres curinga.
+        * `ORDER BY gp.nome`: Ordena os resultados da consulta em ordem alfabética com base no campo `nome` da entidade.
+    * **Parâmetro da Consulta:**
+        * `consulta.setParameter("pNome", nomeBusca);`: Define o valor do parâmetro nomeado `:pNome` na consulta.
+        * O valor `nomeBusca` é preparado como `"%TEXTO_DIGITADO_EM_MAIUSCULAS%"` (ou apenas `"%"` se nada for digitado) para que a cláusula `LIKE` funcione corretamente, encontrando qualquer nome que *contenha* o texto fornecido.
+
+* **Execução da Consulta e Processamento dos Resultados:**
+    * `List<GrupoProdutoVO> lista = consulta.getResultList();`: Executa a consulta JPQL e retorna uma lista de objetos `GrupoProdutoVO` que satisfazem os critérios.
+    * O código então verifica se a lista não está vazia (`!lista.isEmpty()`).
+    * Se houver resultados, ele itera sobre a lista (`for (GrupoProdutoVO grupo : lista)`) e imprime os detalhes de cada `GrupoProdutoVO` no console.
+    * Se nenhum objeto for encontrado, uma mensagem informativa é exibida.
+
+* **Transações em Consultas:**
+    * Para operações de apenas leitura (como `SELECT` queries no JPA), não é estritamente necessário iniciar e comitar uma transação (`em.getTransaction().begin()`, `em.getTransaction().commit()`). O JPA pode executar consultas `SELECT` fora de uma transação explícita na maioria dos casos.
